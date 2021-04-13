@@ -15,6 +15,9 @@ type
     compileConstruct: CompileConstruct
     runState: Deque[RunState]
 
+  Word = uint16
+  DoubleWord = array[2, Word]
+
   Memory = object
     pos: Natural
     buf: array[1024, byte]
@@ -59,6 +62,9 @@ converter toU16(c: Cell): uint16 =
 
 converter toCell(u: uint16): Cell =
   result = Cell(kind: CellType.data, data: u)
+
+template `as`(a, b: untyped): untyped =
+  cast[`b`](`a`)
 
 proc initTokenObject(kind: TokenType): TokenObject =
   const spectypes ={ TokenType.if, TokenType.then, TokenType.loop,
@@ -142,17 +148,17 @@ template forthArith(f: var Forth, op: untyped, booleanop = false): untyped =
   checkBinary f
   let (top, err) = f.data.pop
   handleErr err
-  let topcast = cast[int16](top.toU16)
+  let topcast = top.toU16 as int16
   let (top2, err2) = f.data.pop
   handleErr err2
-  let top2cast = cast[int16](top2.toU16)
+  let top2cast = top2.toU16 as int16
   let value = `op`(top2cast, topcast)
   if booleanop:
-    var boolval = if cast[bool](value): -1'i16 else: 0'i16
-    let (_, err3) = f.data.push cast[uint16](boolval)
+    var boolval = if (value as bool): -1'i16 else: 0'i16
+    let (_, err3) = f.data.push(boolval as uint16)
     handleErr err3
   else:
-    let (_, err3) = f.data.push(cast[uint16](value))
+    let (_, err3) = f.data.push(value as uint16)
     handleErr err3
 
 proc addForth(f: var Forth) =
@@ -182,7 +188,7 @@ proc showTop(f: var Forth) =
 
   case v.kind
   of CellType.data:
-    stdout.write(cast[int16](v.data), ' ')
+    stdout.write(v.data as int16, ' ')
   of CellType.memory:
     let thelen = f.mem.buf[v.pos]
     for i in 1.byte .. thelen:
@@ -202,20 +208,19 @@ proc showTopDouble(f: var Forth) =
   handleErr err1
   let (p2, err2) = f.data.pop
   handleErr err2
-  let p = cast[uint32]([p1.toU16, p2.toU16])
-  stdout.write(cast[int32](p), ' ')
+  let p = [p1.toU16, p2.toU16] as uint32
+  stdout.write(p as int32, ' ')
   f.show = true
 
 proc showTopQuad(f: var Forth) =
   var data: array[4, uint16]
   for i in 0 .. 3:
-    var err: StackError
-    (data[i], err) = f.data.pop
-    data[i] = data[i].toU16
+    let (someval, err) = f.data.pop
+    data[i] = someval.toU16
     handleErr err
-  let p = cast[uint64](data)
+  let p = data as uint64
 
-  stdout.write(cast[int64](p), ' ')
+  stdout.write(p as int64,' ')
   f.show = true
 
 proc showStack(f: var Forth) =
@@ -320,25 +325,25 @@ proc dropDouble(f: var Forth) =
 template forthArithDouble(f: var Forth, op: untyped, booleanop = false): untyped =
   checkArity f, 4
   retrieveBinaryDouble f
-  let p1 = cast[uint32]([p11.toU16, p12.toU16])
-  let p2 = cast[uint32]([p21.toU16, p22.toU16])
-  let val = `op`(cast[int32](p2), cast[int32](p1))
+  let p1 = [p11.toU16, p12.toU16] as uint32
+  let p2 = [p21.toU16, p22.toU16] as uint32
+  let val = `op`(p2 as int32, p1 as int32)
   if booleanop:
-    discard f.data.push(if bool(val): cast[uint16](-1) else: 0)
+    discard f.data.push(if bool(val): -1 as uint16 else: 0)
   else:
-    let data = cast[array[2, uint16]](cast[uint32](val))
+    let data = (val as uint32) as DoubleWord
     for i in countdown(data.high, 0):
       discard f.data.push data[i]
 
 proc divmod(f: var Forth) =
   checkBinary f
   retrieveBinary f
-  let v1i = cast[int16](v1)
-  let v2i = cast[int16](v2)
+  let v1i = v1.toU16 as int16
+  let v2i = v2.toU16 as int16
   let rem = v2i mod v1i
   let quot = v2i div v1i
-  discard f.data.push cast[uint16](rem)
-  discard f.data.push cast[uint16](quot)
+  discard f.data.push(rem  as uint16)
+  discard f.data.push(quot as uint16)
 
 template handleString(line: string, start = 0): (bool, string) =
   var r = (false, "")
@@ -390,7 +395,7 @@ proc constructBody(f: var Forth, cc: CompileConstruct) =
     of TokenType.if:
       let (testTrue, err) = f.data.pop
       handleErr err
-      let trueTrue = cast[int16](testTrue.toU16)
+      let trueTrue = testTrue.toU16 as int16
       isTrue = trueTrue == -1
     of TokenType.else:
       isTrue = not isTrue
@@ -401,7 +406,7 @@ proc constructBody(f: var Forth, cc: CompileConstruct) =
         lastjumpIdx.addFirst idx
         let (looping, err) = f.data.pop
         handleErr err
-        let loopTime = cast[int16](looping.toU16)
+        let loopTime = looping.toU16 as int16
         lastLoopCount.addFirst loopTime
     of TokenType.loop:
       if isTrue:
@@ -427,7 +432,7 @@ proc constructDef(vm: var Forth) =
 proc putData(vm: var Forth, val: int, runState: RunState) =
   template addTo(n: static[int], isCompiled: static[bool], typ: typedesc):
     typed =
-    let data = cast[array[n, uint16]](cast[typ](val))
+    let data = (val as typ) as array[n, uint16]
     for i in countdown(data.high, 0):
       when isCompiled:
         vm.compileConstruct.construct.add initTokenObject(data[i])
@@ -440,19 +445,19 @@ proc putData(vm: var Forth, val: int, runState: RunState) =
     elif val < int16.low or val > int16.high:
       addTo(2, true, uint32)
     else:
-      vm.compileConstruct.construct.add initTokenObject(cast[uint16](val))
+      vm.compileConstruct.construct.add initTokenObject(val as uint16)
   else:
     if val < int32.low or val > int32.high:
       addTo(4, false, uint64)
     elif val < int16.low or val > int16.high:
       addTo(2, false, uint64)
     else:
-      discard vm.data.push(cast[uint16](val))
+      discard vm.data.push(val as uint16)
 
 proc toDouble(f: var Forth) =
   let (v, err) = f.data.pop
   handleErr err
-  let vv = cast[array[2, uint16]](cast[uint32](cast[int32](cast[int16](v.toU16))))
+  let vv = (v.toU16) as int16 as int32 as uint32 as DoubleWord
   for i in countdown(vv.high, 0):
     discard f.data.push vv[i]
 
@@ -529,7 +534,7 @@ template registration(vm: var Forth): untyped =
   vm.register("to-double", toDouble)
   #vm.register("if", (f: var Forth) => f.constructIfThen(TokenType.`if`))
   #vm.register("then", (f: var Forth) => f.constructIfThen(TokenType.then))
-  vm.register("true", (f: var Forth) => (discard f.data.push cast[uint16](-1)))
+  vm.register("true", (f: var Forth) => (discard f.data.push(-1 as uint16)))
   vm.register("false", (f: var Forth) => (discard f.data.push 0'u16))
   vm.register(">r", toR)
   vm.register("r>", fromR)
@@ -549,9 +554,9 @@ proc eval(vm: var Forth, image: string): RunState =
       vm.mem.buf[vm.mem.pos+i+1] = byte c
       inc count
     if vm.runState.len > 1 and vm.runState[1] == rsInterpret:
-      vm.mem.buf[cast[byte](vm.data[0].pos)] += byte count
+      vm.mem.buf[(vm.data[0].pos) as byte] += byte count
     elif vm.runState.len > 1 and vm.runState[1] == rsCompile:
-      vm.mem.buf[cast[byte](vm.compileConstruct.construct[vm.compileConstruct.construct.len-1].mempos)] += byte count
+      vm.mem.buf[(vm.compileConstruct.construct[vm.compileConstruct.construct.len-1].mempos) as byte] += byte count
     inc vm.mem.pos, count
   var start = 0
   for token in image.splitWhitespace:
@@ -587,7 +592,7 @@ proc eval(vm: var Forth, image: string): RunState =
         vm.mem.buf[vm.mem.pos+i+1] = byte c
         inc count
       vm.mem.buf[vm.mem.pos] = byte(count)
-      let data = Cell(kind: CellType.memory, pos: cast[uint16](vm.mem.pos))
+      let data = Cell(kind: CellType.memory, pos: vm.mem.pos as uint16)
       if vm.runState.len > 1 and vm.runState[1] == rsInterpret:
         discard vm.data.push data
       elif vm.runState.len > 1 and vm.runState[1] == rsCompile:
