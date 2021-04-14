@@ -365,7 +365,7 @@ proc spaces(f: var Forth) =
 proc emit(f: var Forth) =
   let (v, err) = f.data.pop
   handleErr err
-  stdout.write chr(uint16(v))
+  stdout.write chr(v.toU16)
   f.show = true
 
 proc drop(f: var Forth) =
