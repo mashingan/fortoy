@@ -656,6 +656,11 @@ proc main =
         line = ""
       else:
         stdout.write c
+        if c == '\b':
+          if line.len > 1: line = line[0..^2]
+          stdout.write ' '
+          stdout.write c
+          continue
         line &= c
 
 main()
