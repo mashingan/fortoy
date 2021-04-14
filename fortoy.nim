@@ -1,5 +1,6 @@
 import tables, strutils, sequtils, deques
 from sugar import `=>`, `->`, dump
+from terminal import getch
 
 type
   #Stack = Deque[uint16]
@@ -645,9 +646,16 @@ proc main =
   dump vm.data.sizeof
     
   block repl:
+    var line: string
     while true:
-      let line = stdin.readLine
-      if line.len <= 0: continue
-      if vm.eval(line) == rsHalt: break
+      var c = getch()
+      if c.ord == 0: continue
+      if c == '\n' or c == '\r' or c == '\L':
+        stdout.write ' '
+        if vm.eval(line) == rsHalt: break
+        line = ""
+      else:
+        stdout.write c
+        line &= c
 
 main()
