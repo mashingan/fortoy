@@ -543,6 +543,13 @@ template registration(vm: var Forth): untyped =
   vm.register("r@", iR)
   vm.register("J", jR)
 
+template passWhenCommented(vm: Forth, token: string): untyped =
+  if vm.runState[0] == rsComment and not token.endsWith ")":
+    continue
+template passWhenInString(vm: Forth, token: string): untyped =
+  if vm.runState[0] == rsString and not token.endsWith "\"":
+    continue
+
 proc eval(vm: var Forth, image: string): RunState =
   result = vm.runState[0]
   var commentToEnd = false
@@ -565,11 +572,9 @@ proc eval(vm: var Forth, image: string): RunState =
     if token == "\\":
       commentToEnd = true
       continue
-    if vm.runState[0] == rsComment and not token.endsWith ")":
-      continue
 
-    if vm.runState[0] == rsString and not token.endsWith "\"":
-      continue
+    vm.passWhenCommented token
+    vm.passWhenInString token
 
     if token == "bye": return rsHalt
 
@@ -653,6 +658,7 @@ proc main =
       if c == '\n' or c == '\r' or c == '\L':
         stdout.write ' '
         if vm.eval(line) == rsHalt: break
+        stdout.write '\n'
         line = ""
       else:
         stdout.write c
