@@ -153,14 +153,20 @@ template forthArith(f: var Forth, op: untyped, booleanop = false): untyped =
   let (top2, err2) = f.data.pop
   handleErr err2
   let top2cast = top2.toU16 as int16
-  let value = `op`(top2cast, topcast)
-  if booleanop:
+  when booleanop:
+    let value = `op`(top2cast, topcast)
     var boolval = if (value as bool): -1'i16 else: 0'i16
     let (_, err3) = f.data.push(boolval as uint16)
     handleErr err3
   else:
-    let (_, err3) = f.data.push(value as uint16)
-    handleErr err3
+    let value: int32 = `op`(top2cast as int32, topcast as int32)
+    if value > int16.high or value < int16.low:
+      let data = value as uint32 as DoubleWord
+      for i in countdown(data.high, 0):
+        discard f.data.push(data[i])
+    else:
+      let (_, err3) = f.data.push(value as uint16)
+      handleErr err3
 
 proc addForth(f: var Forth) =
   forthArith(f, `+`)
@@ -431,8 +437,7 @@ proc constructDef(vm: var Forth) =
   vm.register(vm.compileConstruct.name, closure)
 
 proc putData(vm: var Forth, val: int, runState: RunState) =
-  template addTo(n: static[int], isCompiled: static[bool], typ: typedesc):
-    typed =
+  template addTo(n: static[int], isCompiled: static[bool], typ: typedesc) =
     let data = (val as typ) as array[n, uint16]
     for i in countdown(data.high, 0):
       when isCompiled:
@@ -533,6 +538,7 @@ template registration(vm: var Forth): untyped =
   vm.register("4.", showTopQuad)
   vm.register("4dup", dupQuad)
   vm.register("to-double", toDouble)
+  vm.register("2dw", toDouble)
   #vm.register("if", (f: var Forth) => f.constructIfThen(TokenType.`if`))
   #vm.register("then", (f: var Forth) => f.constructIfThen(TokenType.then))
   vm.register("true", (f: var Forth) => (discard f.data.push(-1 as uint16)))
@@ -633,7 +639,7 @@ proc eval(vm: var Forth, image: string): RunState =
       vm.dict[token](vm)
 
   if vm.show:
-    echo " ok"
+    stdout.write " ok"
     vm.show = false
   result = vm.runState[0]
 
