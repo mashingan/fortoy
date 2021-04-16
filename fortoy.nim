@@ -180,13 +180,19 @@ proc mulForth(f: var Forth) =
 proc divForth(f: var Forth) =
   forthArith(f, `div`)
 
-proc isNumber(token: string): bool =
-  if token.len > 1 and token[0] == '-' and token[1 .. ^1].all(isDigit):
-    true
-  elif token.len > 0 and token.all(isDigit):
-    true
-  else:
-    false
+template isNumber(token: string, op: untyped, t: typedesc): untyped =
+  try:
+    let val = `op`(token)
+    result = (true, val)
+  except:
+    var init: t
+    result = (false, init)
+
+proc isInt(token: string): (bool, int) =
+  isNumber(token, parseInt, int)
+
+proc isFloat(token: string): (bool, float) =
+  isNumber(token, parseFloat, float)
 
 proc showTop(f: var Forth) =
   checkArity f, 1
@@ -449,7 +455,7 @@ proc constructDef(vm: var Forth) =
   var closure = proc(f: var Forth) = f.constructBody cc
   vm.register(vm.compileConstruct.name, closure)
 
-proc putData(vm: var Forth, val: int, runState: RunState) =
+proc putData(vm: var Forth, val: int|float, runState: RunState) =
   template addTo(n: static[int], isCompiled: static[bool], typ: typedesc) =
     let data = (val as typ) as array[n, uint16]
     for i in countdown(data.high, 0):
@@ -458,20 +464,21 @@ proc putData(vm: var Forth, val: int, runState: RunState) =
       else:
         discard vm.data.push data[i]
 
-  if runState == rsCompile:
-    if val < int32.low or val > int32.high:
-      addTo(4, true, uint64)
-    elif val < int16.low or val > int16.high:
-      addTo(2, true, uint32)
+  when val.type is int:
+    if runState == rsCompile:
+      if val < int32.low or val > int32.high:
+        addTo(4, true, uint64)
+      elif val < int16.low or val > int16.high:
+        addTo(2, true, uint32)
+      else:
+        vm.compileConstruct.construct.add initTokenObject(val as uint16)
     else:
-      vm.compileConstruct.construct.add initTokenObject(val as uint16)
-  else:
-    if val < int32.low or val > int32.high:
-      addTo(4, false, uint64)
-    elif val < int16.low or val > int16.high:
-      addTo(2, false, uint64)
-    else:
-      discard vm.data.push(val as uint16)
+      if val < int32.low or val > int32.high:
+        addTo(4, false, uint64)
+      elif val < int16.low or val > int16.high:
+        addTo(2, false, uint64)
+      else:
+        discard vm.data.push(val as uint16)
 
 proc toDouble(f: var Forth) =
   let (v, err) = f.data.pop
@@ -614,8 +621,9 @@ proc eval(vm: var Forth, image: string): RunState =
       vm.runState[0] = rsComment
     elif vm.runState[0] == rsCompile and vm.compileConstruct.name == "":
       vm.compileConstruct.name = token
-    elif token.isNumber:
-      let val = token.parseInt
+    elif (var (isnum, val) = token.isInt; isnum):
+      putData(vm, val, vm.runState[0])
+    elif (var (isnum, val) = token.isFloat; isnum):
       putData(vm, val, vm.runState[0])
     elif token == ".\"":
       vm.runState.addFirst rsString
