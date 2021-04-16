@@ -1,4 +1,4 @@
-import tables, strutils, sequtils, deques
+import tables, strutils, deques
 from sugar import `=>`, `->`, dump
 from terminal import getch
 
@@ -182,7 +182,7 @@ proc divForth(f: var Forth) =
 
 template isNumber(token: string, op: untyped, t: typedesc): untyped =
   try:
-    let val = `op`(token)
+    let val = `t`(`op`(token))
     result = (true, val)
   except:
     var init: t
@@ -191,8 +191,8 @@ template isNumber(token: string, op: untyped, t: typedesc): untyped =
 proc isInt(token: string): (bool, int) =
   isNumber(token, parseInt, int)
 
-proc isFloat(token: string): (bool, float) =
-  isNumber(token, parseFloat, float)
+proc isFloat(token: string): (bool, float32) =
+  isNumber(token, parseFloat, float32)
 
 proc showTop(f: var Forth) =
   checkArity f, 1
@@ -234,6 +234,16 @@ proc showTopQuad(f: var Forth) =
   let p = data as uint64
 
   stdout.write(p as int64,' ')
+  f.show = true
+
+proc showTopFloat(f: var Forth) =
+  checkBinary f
+  let (f1, err1) = f.data.pop
+  handleErr err1
+  let (f2, err2) = f.data.pop
+  handleErr err2
+  let flo32 = [f1.toU16, f2.toU16] as float32
+  stdout.write flo32, ' '
   f.show = true
 
 proc showStack(f: var Forth) =
@@ -455,7 +465,7 @@ proc constructDef(vm: var Forth) =
   var closure = proc(f: var Forth) = f.constructBody cc
   vm.register(vm.compileConstruct.name, closure)
 
-proc putData(vm: var Forth, val: int|float, runState: RunState) =
+proc putData(vm: var Forth, val: int|float32, runState: RunState) =
   template addTo(n: static[int], isCompiled: static[bool], typ: typedesc) =
     let data = (val as typ) as array[n, uint16]
     for i in countdown(data.high, 0):
@@ -479,6 +489,11 @@ proc putData(vm: var Forth, val: int|float, runState: RunState) =
         addTo(2, false, uint64)
       else:
         discard vm.data.push(val as uint16)
+  elif val.type is float32:
+    if runState == rsCompile:
+      addTo(2, true, float32)
+    else:
+      addTo(2, false, float32)
 
 proc toDouble(f: var Forth) =
   let (v, err) = f.data.pop
@@ -559,6 +574,7 @@ template registration(vm: var Forth): untyped =
   vm.register("4dup", dupQuad)
   vm.register("to-double", toDouble)
   vm.register("2dw", toDouble)
+  vm.register("f.", showTopFloat)
   vm.register("f+", (f: var Forth) =>  forthArithFloat(f, `+`))
   vm.register("f-", (f: var Forth) =>  forthArithFloat(f, `-`))
   vm.register("f*", (f: var Forth) =>  forthArithFloat(f, `*`))
