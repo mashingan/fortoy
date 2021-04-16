@@ -26,7 +26,7 @@ type
   CellType {.size: 1, pure.} = enum
     data memory
 
-  Cell = object {.packed.}
+  Cell {.packed.} = object
     case kind: CellType
     of CellType.data:
       data: uint16
@@ -120,7 +120,7 @@ proc pop(stack: var Stack): (Cell, StackError) =
     result = (v, StackError())
   except:
     let e = getCurrentException()
-    result = (Cell(), StackError(name: "StackError", msg: e.msg))
+    result = (Cell(), StackError(name: "StackError", msg: move e.msg))
 
 proc push[T: Cell|uint16](stack: var Stack, value: T): (bool, StackError) =
   stack.addFirst value
@@ -411,7 +411,6 @@ template forthArithFloat(f: var Forth, op: untyped, booleanop = false): untyped 
 proc constructBody(f: var Forth, cc: CompileConstruct) =
   dump cc
   var isTrue = true
-  var isLoop = false
   var idx = 0
   var lastjumpIdx = initDeque[int]()
   var lastLoopCount = initDeque[int16]()
@@ -463,7 +462,7 @@ proc constructBody(f: var Forth, cc: CompileConstruct) =
 proc constructDef(vm: var Forth) =
   let cc = vm.compileConstruct
   var closure = proc(f: var Forth) = f.constructBody cc
-  vm.register(vm.compileConstruct.name, closure)
+  vm.register(vm.compileConstruct.name, move closure)
 
 proc putData(vm: var Forth, val: int|float32, runState: RunState) =
   template addTo(n: static[int], isCompiled: static[bool], typ: typedesc) =
@@ -502,10 +501,6 @@ proc toDouble(f: var Forth) =
   for i in countdown(vv.high, 0):
     discard f.data.push vv[i]
 
-template constructIfThen(f: var Forth, kind: TokenType): untyped =
-  if f.runState == rsCompile and f.compileConstruct.name != "":
-    f.compileConstruct.construct.add initTokenObject(kind)
-
 template ifthenConstruct(f: Forth, target, token: string): bool =
   target == token and f.compileConstruct.name != "" and f.runState[0] == rsCompile
 
@@ -530,7 +525,6 @@ proc jR(f: var Forth) =
     echo "insufficient return stack"
     return
   discard f.ret.push f.ret[2]
-
 
 template registration(vm: var Forth): untyped =
   vm.register("+", addForth)
@@ -584,8 +578,6 @@ template registration(vm: var Forth): untyped =
   vm.register("f>=", (f: var Forth) => forthArithDouble(f, `>=`, true))
   vm.register("f<=", (f: var Forth) => forthArithDouble(f, `<=`, true))
   vm.register("f=", (f: var Forth) =>  forthArithDouble(f, `==`, true))
-  #vm.register("if", (f: var Forth) => f.constructIfThen(TokenType.`if`))
-  #vm.register("then", (f: var Forth) => f.constructIfThen(TokenType.then))
   vm.register("true", (f: var Forth) => (discard f.data.push(-1 as uint16)))
   vm.register("false", (f: var Forth) => (discard f.data.push 0'u16))
   vm.register(">r", toR)
@@ -606,7 +598,7 @@ proc eval(vm: var Forth, image: string): RunState =
   var commentToEnd = false
   if vm.runState[0] == rsString:
     let start = 0
-    var (inline, strbuf) = image.handleString start
+    var (_, strbuf) = image.handleString start
     var count = 1
     strbuf = '\n' & strbuf
     for i, c in strbuf:
@@ -640,7 +632,7 @@ proc eval(vm: var Forth, image: string): RunState =
     elif token == ".\"":
       vm.runState.addFirst rsString
       start = image.find(".\"", start) + 2
-      let (endInline, stringbuf) = handleString(image, start)
+      let (_, stringbuf) = handleString(image, start)
       var count = 0
       for i, c in stringbuf:
         vm.mem.buf[vm.mem.pos+i+1] = byte c
