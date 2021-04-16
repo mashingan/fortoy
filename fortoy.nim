@@ -142,8 +142,8 @@ proc push[T: Cell|uint16](stack: var Stack, value: T): (bool, StackError) =
   stack.addFirst value
   result = (true, StackError())
 
-proc register(f: var Forth, word: string, prc: proc(f: var Forth)) =
-  f.dict[word] = prc
+proc register(f: var Forth, word: string, prc: sink proc(f: var Forth)) =
+  f.dict[word] = move prc
 
 template handleErr(err: StackError): untyped =
   if err.msg != "":
@@ -580,22 +580,22 @@ template registration(vm: var Forth): untyped =
   vm.register("drop", drop)
   vm.register("mod", (f: var Forth) => forthArith(f, `mod`))
   vm.register("/mod", divmod)
-  vm.register("2swap", swapDouble)
-  vm.register("2dup", dupDouble)
-  vm.register("2over", overDouble)
-  vm.register("2drop", dropDouble)
-  vm.register("2+", (f: var Forth) => forthArithDouble(f, `+`))
-  vm.register("2-", (f: var Forth) => forthArithDouble(f, `-`))
-  vm.register("2/", (f: var Forth) => forthArithDouble(f, `div`))
-  vm.register("2*", (f: var Forth) => forthArithDouble(f, `*`))
-  vm.register("2>", (f: var Forth) =>  forthArithDouble(f,  `>`, true))
-  vm.register("2<", (f: var Forth) =>  forthArithDouble(f,  `<`, true))
-  vm.register("2>=", (f: var Forth) => forthArithDouble(f, `>=`, true))
-  vm.register("2<=", (f: var Forth) => forthArithDouble(f, `<=`, true))
-  vm.register("2=", (f: var Forth) =>  forthArithDouble(f, `==`, true))
-  vm.register("2.", showTopDouble)
-  vm.register("4.", showTopQuad)
-  vm.register("4dup", dupQuad)
+  vm.register("dswap", swapDouble)
+  vm.register("ddup", dupDouble)
+  vm.register("dover", overDouble)
+  vm.register("ddrop", dropDouble)
+  vm.register("d+", (f: var Forth) => forthArithDouble(f, `+`))
+  vm.register("d-", (f: var Forth) => forthArithDouble(f, `-`))
+  vm.register("d/", (f: var Forth) => forthArithDouble(f, `div`))
+  vm.register("d*", (f: var Forth) => forthArithDouble(f, `*`))
+  vm.register("d>", (f: var Forth) =>  forthArithDouble(f,  `>`, true))
+  vm.register("d<", (f: var Forth) =>  forthArithDouble(f,  `<`, true))
+  vm.register("d>=", (f: var Forth) => forthArithDouble(f, `>=`, true))
+  vm.register("d<=", (f: var Forth) => forthArithDouble(f, `<=`, true))
+  vm.register("d=", (f: var Forth) =>  forthArithDouble(f, `==`, true))
+  vm.register("d.", showTopDouble)
+  vm.register("q.", showTopQuad)
+  vm.register("qdup", dupQuad)
   vm.register("to-double", toDouble)
   vm.register("2dw", toDouble)
   vm.register("f.", showTopFloat)
@@ -609,7 +609,8 @@ template registration(vm: var Forth): untyped =
   vm.register("f<=", (f: var Forth) => forthArithDouble(f, `<=`, true))
   vm.register("f=", (f: var Forth) =>  forthArithDouble(f, `==`, true))
   vm.register("to-float", toFloat)
-  vm.register("2float", toFloat)
+  vm.register("d2float", toFloat)
+  vm.register("w2float", (f: var Forth) => (f.toDouble; f.toFloat))
   vm.register("true", (f: var Forth) => (discard f.data.push(-1 as uint16)))
   vm.register("false", (f: var Forth) => (discard f.data.push 0'u16))
   vm.register(">r", toR)
