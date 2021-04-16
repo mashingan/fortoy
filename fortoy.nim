@@ -379,6 +379,19 @@ proc drop(f: var Forth) =
   let (_, err) = f.data.pop
   handleErr err
 
+template forthArithFloat(f: var Forth, op: untyped, booleanop = false): untyped =
+  checkArity f, 4
+  retrieveBinaryDouble f
+  let p1 = [p11.toU16, p12.toU16] as float32
+  let p2 = [p21.toU16, p22.toU16] as float32
+  let val = `op`(p2, p1 )
+  if booleanop:
+    discard f.data.push(if bool(val): -1 as uint16 else: 0)
+  else:
+    let data = (val as float32) as DoubleWord
+    for i in countdown(data.high, 0):
+      discard f.data.push data[i]
+
 proc constructBody(f: var Forth, cc: CompileConstruct) =
   dump cc
   var isTrue = true
@@ -539,6 +552,15 @@ template registration(vm: var Forth): untyped =
   vm.register("4dup", dupQuad)
   vm.register("to-double", toDouble)
   vm.register("2dw", toDouble)
+  vm.register("f+", (f: var Forth) =>  forthArithFloat(f, `+`))
+  vm.register("f-", (f: var Forth) =>  forthArithFloat(f, `-`))
+  vm.register("f*", (f: var Forth) =>  forthArithFloat(f, `*`))
+  vm.register("f/", (f: var Forth) =>  forthArithFloat(f, `/`))
+  vm.register("f>", (f: var Forth) =>  forthArithDouble(f,  `>`, true))
+  vm.register("f<", (f: var Forth) =>  forthArithDouble(f,  `<`, true))
+  vm.register("f>=", (f: var Forth) => forthArithDouble(f, `>=`, true))
+  vm.register("f<=", (f: var Forth) => forthArithDouble(f, `<=`, true))
+  vm.register("f=", (f: var Forth) =>  forthArithDouble(f, `==`, true))
   #vm.register("if", (f: var Forth) => f.constructIfThen(TokenType.`if`))
   #vm.register("then", (f: var Forth) => f.constructIfThen(TokenType.then))
   vm.register("true", (f: var Forth) => (discard f.data.push(-1 as uint16)))
