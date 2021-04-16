@@ -24,7 +24,7 @@ type
     buf: array[1024, byte]
 
   CellType {.size: 1, pure.} = enum
-    data memory
+    data memory address
 
   Cell {.packed.} = object
     case kind: CellType
@@ -32,13 +32,15 @@ type
       data: uint16
     of CellType.memory:
       pos: uint16
+    of CellType.address:
+      address: uint16
 
   StackError = object of CatchableError
 
-  RunState = enum
+  RunState {.size:1} = enum
     rsInterpret rsCompile rsComment rsHalt rsString
 
-  TokenType {.pure.} = enum
+  TokenType {.size:1, pure.} = enum
     data word `if` `else` then noop loop `do` `string`
 
   TokenObject = object
@@ -56,6 +58,20 @@ type
   CompileConstruct = object
     name: string
     construct: seq[TokenObject]
+
+proc sizeof(st: Stack): Natural =
+  result = st.data.sizeof + st.pos.sizeof
+
+proc sizeof(m: Memory): Natural =
+  result = m.buf.sizeof + m.pos.sizeof
+
+proc sizeof(cc: CompileConstruct): Natural =
+  result = cc.name.sizeof + cc.construct.sizeof
+
+proc sizeof(vm: Forth): Natural =
+  result = vm.data.sizeof + vm.ret.sizeof + vm.dict.sizeof +
+    vm.mem.sizeof + vm.show.sizeof + vm.compileConstruct.sizeof +
+    vm.runState.sizeof
 
 converter toU16(c: Cell): uint16 =
   if c.kind == CellType.data:
@@ -208,6 +224,8 @@ proc showTop(f: var Forth) =
       stdout.write(f.mem.buf[v.pos+i].char)
     stdout.write ' '
     f.mem.pos = v.pos
+  else:
+    discard
     #[
     var pos = f.mem.pos - Natural(thelen+1)
     if pos < 0:
@@ -258,6 +276,8 @@ proc showStack(f: var Forth) =
         stdout.write(cell.data, ' ')
       of CellType.memory:
         stdout.write("memory:", cell.pos, ' ')
+      of CellType.address:
+        stdout.write("address:", cell.data, ' ')
     stdout.write "] "
   f.show = true
 
@@ -501,6 +521,16 @@ proc toDouble(f: var Forth) =
   for i in countdown(vv.high, 0):
     discard f.data.push vv[i]
 
+proc toFloat(f: var Forth) =
+  checkBinary f
+  retrieveBinary f
+  let f32 = ([v1.toU16, v2.toU16] as uint32).int32.float32
+  dump f32
+  let vv = f32 as DoubleWord
+  dump vv
+  for i in countdown(vv.high, 0):
+    discard f.data.push vv[i]
+
 template ifthenConstruct(f: Forth, target, token: string): bool =
   target == token and f.compileConstruct.name != "" and f.runState[0] == rsCompile
 
@@ -578,6 +608,8 @@ template registration(vm: var Forth): untyped =
   vm.register("f>=", (f: var Forth) => forthArithDouble(f, `>=`, true))
   vm.register("f<=", (f: var Forth) => forthArithDouble(f, `<=`, true))
   vm.register("f=", (f: var Forth) =>  forthArithDouble(f, `==`, true))
+  vm.register("to-float", toFloat)
+  vm.register("2float", toFloat)
   vm.register("true", (f: var Forth) => (discard f.data.push(-1 as uint16)))
   vm.register("false", (f: var Forth) => (discard f.data.push 0'u16))
   vm.register(">r", toR)
@@ -692,7 +724,11 @@ proc main =
   )
   vm.runState.addFirst rsInterpret
   vm.registration
-  dump vm.data.sizeof
+  #dump vm.data.sizeof
+  dump vm.sizeof
+  for k, v in vm.fieldPairs:
+    dump k.sizeof
+    dump v.sizeof
     
   block repl:
     var line: string
