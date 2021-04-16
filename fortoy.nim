@@ -10,7 +10,8 @@ type
   Forth = object
     data: Stack
     ret: Stack
-    dict: TableRef[string, (f: var Forth) -> void]
+    dict: TableRef[string, uint16]
+    address: seq[(f: var Forth) -> void]
     mem: Memory
     show: bool
     compileConstruct: CompileConstruct
@@ -71,7 +72,7 @@ proc sizeof(cc: CompileConstruct): Natural =
 proc sizeof(vm: Forth): Natural =
   result = vm.data.sizeof + vm.ret.sizeof + vm.dict.sizeof +
     vm.mem.sizeof + vm.show.sizeof + vm.compileConstruct.sizeof +
-    vm.runState.sizeof
+    vm.address.sizeof + vm.runState.sizeof
 
 converter toU16(c: Cell): uint16 =
   if c.kind == CellType.data:
@@ -143,7 +144,9 @@ proc push[T: Cell|uint16](stack: var Stack, value: T): (bool, StackError) =
   result = (true, StackError())
 
 proc register(f: var Forth, word: string, prc: sink proc(f: var Forth)) =
-  f.dict[word] = move prc
+  let curr = f.address.len
+  f.dict[word] = curr.uint16
+  f.address.add prc
 
 template handleErr(err: StackError): untyped =
   if err.msg != "":
@@ -446,7 +449,7 @@ proc constructBody(f: var Forth, cc: CompileConstruct) =
         discard f.data.push(Cell(kind: CellType.memory, pos: obj.mempos))
     of TokenType.word:
       if f.dict.hasKey(obj.word) and isTrue:
-        f.dict[obj.word](f)
+        f.address[f.dict[obj.word]](f)
     of TokenType.if:
       let (testTrue, err) = f.data.pop
       handleErr err
@@ -703,7 +706,7 @@ proc eval(vm: var Forth, image: string): RunState =
     elif vm.runState[0] == rsCompile:
       vm.compileConstruct.construct.add initTokenObject(token)
     elif token in vm.dict:
-      vm.dict[token](vm)
+      vm.address[vm.dict[token]](vm)
     elif (var (isnum, val) = token.isInt; isnum):
       putData(vm, val, vm.runState[0])
     elif (var (isnum, val) = token.isFloat; isnum):
@@ -719,7 +722,8 @@ proc main =
   var vm = Forth(
     data: initStack(),
     ret: initStack(),
-    dict: newTable[string, (f: var Forth) -> void](),
+    dict: newTable[string, uint16](),
+    address: newSeqOfCap[(f: var Forth) -> void](1024),
     compileConstruct: CompileConstruct(),
     runState: initDeque[RunState](),
   )
