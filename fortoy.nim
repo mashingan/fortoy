@@ -637,10 +637,6 @@ proc eval(vm: var Forth, image: string): RunState =
       vm.runState[0] = rsComment
     elif vm.runState[0] == rsCompile and vm.compileConstruct.name == "":
       vm.compileConstruct.name = token
-    elif (var (isnum, val) = token.isInt; isnum):
-      putData(vm, val, vm.runState[0])
-    elif (var (isnum, val) = token.isFloat; isnum):
-      putData(vm, val, vm.runState[0])
     elif token == ".\"":
       vm.runState.addFirst rsString
       start = image.find(".\"", start) + 2
@@ -683,6 +679,10 @@ proc eval(vm: var Forth, image: string): RunState =
       vm.compileConstruct.construct.add initTokenObject(token)
     elif token in vm.dict:
       vm.dict[token](vm)
+    elif (var (isnum, val) = token.isInt; isnum):
+      putData(vm, val, vm.runState[0])
+    elif (var (isnum, val) = token.isFloat; isnum):
+      putData(vm, val, vm.runState[0])
 
   if vm.show:
     stdout.write " ok"
