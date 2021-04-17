@@ -492,12 +492,10 @@ proc constructBody(f: var Forth, cc: CompileConstruct): ConstructError =
           dec count
           lastLoopCount.addFirst count
     of TokenType.break:
-      if nextjumpIdx.len > 0:
-        idx = nextjumpIdx.popFirst
-        if lastjumpIdx.len > 0:
-          discard lastjumpIdx.popFirst
-        if lastLoopCount.len > 0:
-          discard lastLoopCount.popFirst
+      for i, nextjmp in nextjumpIdx:
+        if nextjmp > idx:
+          idx = nextjmp
+          break
       
     of TokenType.noop:
       discard
