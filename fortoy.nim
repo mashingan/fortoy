@@ -432,7 +432,7 @@ template forthArithFloat(f: var Forth, op: untyped, booleanop = false): untyped 
     for i in countdown(data.high, 0):
       discard f.data.push data[i]
 
-proc constructBody(f: var Forth, cc: CompileConstruct): ConstructError =
+proc constructBody(f: var Forth, cc: sink CompileConstruct): ConstructError =
   dump cc
   var isTrue = true
   var idx = 0
@@ -504,9 +504,9 @@ proc constructBody(f: var Forth, cc: CompileConstruct): ConstructError =
   return ConstructError()
 
 proc constructDef(vm: var Forth) =
-  let cc = vm.compileConstruct
+  var cc = vm.compileConstruct
   var closure = proc(f: var Forth) =
-    var err = f.constructBody cc
+    var err = f.constructBody(move cc)
     if err.msg != "": echo err.msg
 
   vm.register(vm.compileConstruct.name, move closure)
