@@ -440,15 +440,21 @@ proc constructBody(f: var Forth, cc: CompileConstruct) =
   #for idx, obj in cc.construct:
   while idx <= cc.construct.high:
     let obj = cc.construct[idx]
+    if obj.kind == TokenType.then:
+      inc idx
+      isTrue = true
+      continue
+    if not isTrue:
+      inc idx
+      continue
+
     case obj.kind
     of TokenType.data:
-      if isTrue:
-        discard f.data.push obj.data
+      discard f.data.push obj.data
     of TokenType.string:
-      if isTrue:
-        discard f.data.push(Cell(kind: CellType.memory, pos: obj.mempos))
+      discard f.data.push(Cell(kind: CellType.memory, pos: obj.mempos))
     of TokenType.word:
-      if f.dict.hasKey(obj.word) and isTrue:
+      if f.dict.hasKey(obj.word):
         f.address[f.dict[obj.word]](f)
     of TokenType.if:
       let (testTrue, err) = f.data.pop
@@ -460,23 +466,21 @@ proc constructBody(f: var Forth, cc: CompileConstruct) =
     of TokenType.then:
       isTrue = true
     of TokenType.do:
-      if isTrue:
-        lastjumpIdx.addFirst idx
-        let (looping, err) = f.data.pop
-        handleErr err
-        let loopTime = looping.toU16 as int16
-        lastLoopCount.addFirst loopTime
+      lastjumpIdx.addFirst idx
+      let (looping, err) = f.data.pop
+      handleErr err
+      let loopTime = looping.toU16 as int16
+      lastLoopCount.addFirst loopTime
     of TokenType.loop:
-      if isTrue:
-        if lastjumpIdx.len > 0 and lastLoopCount.len > 0:
-          var count = lastLoopCount.popFirst
-          if count > 1:
-            idx = lastjumpIdx[0]
-            dec count
-            lastLoopCount.addFirst count
-          else:
-            discard lastjumpIdx.popFirst
-        
+      if lastjumpIdx.len > 0 and lastLoopCount.len > 0:
+        var count = lastLoopCount.popFirst
+        if count > 1:
+          idx = lastjumpIdx[0]
+          dec count
+          lastLoopCount.addFirst count
+        else:
+          discard lastjumpIdx.popFirst
+      
     of TokenType.noop:
       discard
 
@@ -528,9 +532,7 @@ proc toFloat(f: var Forth) =
   checkBinary f
   retrieveBinary f
   let f32 = ([v1.toU16, v2.toU16] as uint32).int32.float32
-  dump f32
   let vv = f32 as DoubleWord
-  dump vv
   for i in countdown(vv.high, 0):
     discard f.data.push vv[i]
 
