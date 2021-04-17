@@ -37,6 +37,7 @@ type
       address: uint16
 
   StackError = object of CatchableError
+  ConstructError = object of CatchableError
 
   RunState {.size:1} = enum
     rsInterpret rsCompile rsComment rsHalt rsString
@@ -431,7 +432,7 @@ template forthArithFloat(f: var Forth, op: untyped, booleanop = false): untyped 
     for i in countdown(data.high, 0):
       discard f.data.push data[i]
 
-proc constructBody(f: var Forth, cc: CompileConstruct) =
+proc constructBody(f: var Forth, cc: CompileConstruct): ConstructError =
   dump cc
   var isTrue = true
   var idx = 0
@@ -439,6 +440,16 @@ proc constructBody(f: var Forth, cc: CompileConstruct) =
   var lastLoopCount = initDeque[int16]()
   var nextjumpIdx = initDeque[int]()
   #for idx, obj in cc.construct:
+  for i, obj in cc.construct:
+    case obj.kind
+    of TokenType.do:
+      lastjumpIdx.addLast i
+    of TokenType.loop:
+      nextjumpIdx.addFirst i
+    else:
+      discard
+  if lastjumpIdx.len != nextjumpIdx.len:
+    return ConstructError(msg: "Invalid construct do-loop pair")
   while idx <= cc.construct.high:
     let obj = cc.construct[idx]
     if obj.kind == TokenType.then:
@@ -472,12 +483,16 @@ proc constructBody(f: var Forth, cc: CompileConstruct) =
       handleErr err
       let loopTime = looping.toU16 as int16
       lastLoopCount.addFirst loopTime
+      let doloopLevel = lastjumpIdx.len
+      var foundcount = 0
       for i, subobj in cc.construct[idx..^1]:
         if subobj.kind == TokenType.loop:
-          nextjumpIdx.addFirst i
-          break
+          inc foundcount
+          if foundcount == doloopLevel:
+            nextjumpIdx.addFirst i
+            break
     of TokenType.loop:
-      if nextjumpIdx.len > 0 and nextjumpIdx[0] != idx:
+      if nextjumpIdx.len > 0 and nextjumpIdx[0] < idx:
         nextjumpIdx.addFirst idx
       else:
         nextjumpIdx.addFirst idx
@@ -492,7 +507,7 @@ proc constructBody(f: var Forth, cc: CompileConstruct) =
     of TokenType.break:
       if nextjumpIdx.len > 0:
         idx = nextjumpIdx.popFirst
-        if nextjumpIdx.len > 0:
+        if lastjumpIdx.len > 0:
           discard lastjumpIdx.popFirst
         if lastLoopCount.len > 0:
           discard lastLoopCount.popFirst
@@ -501,10 +516,14 @@ proc constructBody(f: var Forth, cc: CompileConstruct) =
       discard
 
     inc idx
+  return ConstructError()
 
 proc constructDef(vm: var Forth) =
-  let cc = vm.compileConstruct
-  var closure = proc(f: var Forth) = f.constructBody cc
+  let cc = move vm.compileConstruct
+  var closure = proc(f: var Forth) =
+    var err = f.constructBody cc
+    if err.msg != "": echo err.msg
+
   vm.register(vm.compileConstruct.name, move closure)
 
 proc putData(vm: var Forth, val: int|float32, runState: RunState) =
