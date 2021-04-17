@@ -506,7 +506,7 @@ proc constructBody(f: var Forth, cc: CompileConstruct): ConstructError =
   return ConstructError()
 
 proc constructDef(vm: var Forth) =
-  let cc = move vm.compileConstruct
+  let cc = vm.compileConstruct
   var closure = proc(f: var Forth) =
     var err = f.constructBody cc
     if err.msg != "": echo err.msg
