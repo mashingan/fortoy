@@ -42,7 +42,7 @@ type
     rsInterpret rsCompile rsComment rsHalt rsString
 
   TokenType {.size:1, pure.} = enum
-    data word `if` `else` then noop loop `do` `string`
+    data word `if` `else` then noop loop `do` `string` `break`
 
   TokenObject = object
     case kind: TokenType
@@ -53,7 +53,7 @@ type
     of TokenType.string:
       mempos: uint16
     of TokenType.if, TokenType.else, TokenType.then, TokenType.noop,
-      TokenType.do, TokenType.loop:
+      TokenType.do, TokenType.loop, TokenType.break:
       discard
 
   CompileConstruct = object
@@ -86,7 +86,7 @@ template `as`(a, b: untyped): untyped =
 
 proc initTokenObject(kind: TokenType): TokenObject =
   const spectypes ={ TokenType.if, TokenType.then, TokenType.loop,
-    TokenType.else, TokenType.do}
+    TokenType.else, TokenType.do, TokenType.break}
   if kind notin spectypes:
     result = TokenObject(kind: TokenType.noop)
   else:
@@ -437,6 +437,7 @@ proc constructBody(f: var Forth, cc: CompileConstruct) =
   var idx = 0
   var lastjumpIdx = initDeque[int]()
   var lastLoopCount = initDeque[int16]()
+  var nextjumpIdx = initDeque[int]()
   #for idx, obj in cc.construct:
   while idx <= cc.construct.high:
     let obj = cc.construct[idx]
@@ -471,7 +472,15 @@ proc constructBody(f: var Forth, cc: CompileConstruct) =
       handleErr err
       let loopTime = looping.toU16 as int16
       lastLoopCount.addFirst loopTime
+      for i, subobj in cc.construct[idx..^1]:
+        if subobj.kind == TokenType.loop:
+          nextjumpIdx.addFirst i
+          break
     of TokenType.loop:
+      if nextjumpIdx.len > 0 and nextjumpIdx[0] != idx:
+        nextjumpIdx.addFirst idx
+      else:
+        nextjumpIdx.addFirst idx
       if lastjumpIdx.len > 0 and lastLoopCount.len > 0:
         var count = lastLoopCount.popFirst
         if count > 1:
@@ -480,6 +489,13 @@ proc constructBody(f: var Forth, cc: CompileConstruct) =
           lastLoopCount.addFirst count
         else:
           discard lastjumpIdx.popFirst
+    of TokenType.break:
+      if nextjumpIdx.len > 0:
+        idx = nextjumpIdx.popFirst
+        if nextjumpIdx.len > 0:
+          discard lastjumpIdx.popFirst
+        if lastLoopCount.len > 0:
+          discard lastLoopCount.popFirst
       
     of TokenType.noop:
       discard
@@ -701,6 +717,8 @@ proc eval(vm: var Forth, image: string): RunState =
       vm.compileConstruct.construct.add initTokenObject(TokenType.else)
     elif vm.ifthenConstruct("do", token):
       vm.compileConstruct.construct.add initTokenObject(TokenType.do)
+    elif vm.ifthenConstruct("break", token):
+      vm.compileConstruct.construct.add initTokenObject(TokenType.break)
     elif token == ";" and vm.runState[0] == rsCompile:
       vm.runState[0] = rsInterpret
       dump vm.compileConstruct
