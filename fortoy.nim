@@ -703,14 +703,14 @@ proc eval(vm: var Forth, image: string): RunState =
       dump vm.compileConstruct
       vm.constructDef
       vm.compileConstruct = CompileConstruct()
-    elif vm.runState[0] == rsCompile:
-      vm.compileConstruct.construct.add initTokenObject(token)
-    elif token in vm.dict:
-      vm.address[vm.dict[token]](vm)
     elif (var (isnum, val) = token.isInt; isnum):
       putData(vm, val, vm.runState[0])
     elif (var (isnum, val) = token.isFloat; isnum):
       putData(vm, val, vm.runState[0])
+    elif vm.runState[0] == rsCompile:
+      vm.compileConstruct.construct.add initTokenObject(token)
+    elif token in vm.dict:
+      vm.address[vm.dict[token]](vm)
 
   if vm.show:
     stdout.write " ok"
