@@ -667,7 +667,6 @@ proc eval(vm: var Forth, image: string): RunState =
     elif token == "(" and vm.runState[0] == rsCompile:
       vm.runState[0] = rsComment
     elif vm.runState[0] == rsCompile and vm.compileConstruct.name == "":
-      dump token
       vm.compileConstruct.name = token
     elif token == ".\"":
       vm.runState.addFirst rsString
@@ -707,9 +706,7 @@ proc eval(vm: var Forth, image: string): RunState =
       dump vm.compileConstruct
       vm.constructDef
       vm.compileConstruct = CompileConstruct()
-    elif vm.runState[0] == rsCompile:
-      vm.compileConstruct.construct.add initTokenObject(token)
-    elif token in vm.dict:
+    elif token in vm.dict and vm.runState[0] == rsInterpret:
       vm.address[vm.dict[token]](vm)
     elif (var (isnum, val) = token.isInt; isnum):
       putData(vm, val, vm.runState[0])
