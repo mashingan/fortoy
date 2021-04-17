@@ -439,7 +439,6 @@ proc constructBody(f: var Forth, cc: CompileConstruct): ConstructError =
   var lastjumpIdx = initDeque[int]()
   var lastLoopCount = initDeque[int16]()
   var nextjumpIdx = initDeque[int]()
-  #for idx, obj in cc.construct:
   for i, obj in cc.construct:
     case obj.kind
     of TokenType.do:
@@ -478,32 +477,20 @@ proc constructBody(f: var Forth, cc: CompileConstruct): ConstructError =
     of TokenType.then:
       isTrue = true
     of TokenType.do:
-      lastjumpIdx.addFirst idx
       let (looping, err) = f.data.pop
       handleErr err
       let loopTime = looping.toU16 as int16
       lastLoopCount.addFirst loopTime
-      let doloopLevel = lastjumpIdx.len
-      var foundcount = 0
-      for i, subobj in cc.construct[idx..^1]:
-        if subobj.kind == TokenType.loop:
-          inc foundcount
-          if foundcount == doloopLevel:
-            nextjumpIdx.addFirst i
-            break
     of TokenType.loop:
-      if nextjumpIdx.len > 0 and nextjumpIdx[0] < idx:
-        nextjumpIdx.addFirst idx
-      else:
-        nextjumpIdx.addFirst idx
       if lastjumpIdx.len > 0 and lastLoopCount.len > 0:
         var count = lastLoopCount.popFirst
         if count > 1:
-          idx = lastjumpIdx[0]
+          for i, dopos in nextjumpIdx:
+            if idx == dopos:
+              idx = lastjumpIdx[i]
+              break
           dec count
           lastLoopCount.addFirst count
-        else:
-          discard lastjumpIdx.popFirst
     of TokenType.break:
       if nextjumpIdx.len > 0:
         idx = nextjumpIdx.popFirst
