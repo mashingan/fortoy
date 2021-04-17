@@ -773,7 +773,7 @@ proc main =
       else:
         stdout.write c
         if c == '\b':
-          if line.len > 1: line = line[0..^2]
+          if line.len > 0: line = line[0..^2]
           stdout.write ' '
           stdout.write c
           continue
