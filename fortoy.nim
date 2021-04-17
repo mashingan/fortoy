@@ -705,7 +705,7 @@ proc eval(vm: var Forth, image: string): RunState =
       vm.compileConstruct = CompileConstruct()
     elif (var (isnum, val) = token.isInt; isnum):
       putData(vm, val, vm.runState[0])
-    elif (var (isnum, val) = token.isFloat; isnum):
+    elif (var (isnum, val) = token.isFloat; isnum and token != "."):
       putData(vm, val, vm.runState[0])
     elif vm.runState[0] == rsCompile:
       vm.compileConstruct.construct.add initTokenObject(token)
