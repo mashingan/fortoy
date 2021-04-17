@@ -645,7 +645,8 @@ proc eval(vm: var Forth, image: string): RunState =
     if vm.runState.len > 1 and vm.runState[1] == rsInterpret:
       vm.mem.buf[(vm.data[0].pos) as byte] += byte count
     elif vm.runState.len > 1 and vm.runState[1] == rsCompile:
-      vm.mem.buf[(vm.compileConstruct.construct[vm.compileConstruct.construct.len-1].mempos) as byte] += byte count
+      vm.mem.buf[(vm.compileConstruct.construct[
+        vm.compileConstruct.construct.len-1].mempos) as byte] += byte count
     inc vm.mem.pos, count
   var start = 0
   for token in image.splitWhitespace:
@@ -666,6 +667,7 @@ proc eval(vm: var Forth, image: string): RunState =
     elif token == "(" and vm.runState[0] == rsCompile:
       vm.runState[0] = rsComment
     elif vm.runState[0] == rsCompile and vm.compileConstruct.name == "":
+      dump token
       vm.compileConstruct.name = token
     elif token == ".\"":
       vm.runState.addFirst rsString
@@ -705,14 +707,16 @@ proc eval(vm: var Forth, image: string): RunState =
       dump vm.compileConstruct
       vm.constructDef
       vm.compileConstruct = CompileConstruct()
+    elif vm.runState[0] == rsCompile:
+      vm.compileConstruct.construct.add initTokenObject(token)
+    elif token in vm.dict:
+      vm.address[vm.dict[token]](vm)
     elif (var (isnum, val) = token.isInt; isnum):
       putData(vm, val, vm.runState[0])
     elif (var (isnum, val) = token.isFloat; isnum and token != "."):
       putData(vm, val, vm.runState[0])
     elif vm.runState[0] == rsCompile:
       vm.compileConstruct.construct.add initTokenObject(token)
-    elif token in vm.dict:
-      vm.address[vm.dict[token]](vm)
 
   if vm.show:
     stdout.write " ok"
