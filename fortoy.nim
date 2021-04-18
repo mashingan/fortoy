@@ -147,7 +147,7 @@ proc push[T: Cell|uint16](stack: var Stack, value: T): (bool, StackError) =
   stack.addFirst value
   result = (true, StackError())
 
-proc register(f: var Forth, word: string, prc: sink proc(f: var Forth)) =
+proc register(f: var Forth, word: string, prc: proc(f: var Forth)) =
   let curr = f.address.len
   f.dict[word] = curr.uint16
   f.address.add prc
@@ -231,14 +231,14 @@ proc showTop(f: var Forth) =
       stdout.write(f.mem.buf[v.pos+i].char)
     stdout.write ' '
     f.mem.pos = v.pos
-  else:
-    discard
     #[
     var pos = f.mem.pos - Natural(thelen+1)
     if pos < 0:
       pos = 0
     f.mem.pos = 0
     ]#
+  of CellType.address:
+    stdout.write("address:", v.address.uint16, ' ')
   f.state.show = true
 
 proc showTopDouble(f: var Forth) =
@@ -284,7 +284,7 @@ proc showStack(f: var Forth) =
       of CellType.memory:
         stdout.write("memory:", cell.pos, ' ')
       of CellType.address:
-        stdout.write("address:", cell.data, ' ')
+        stdout.write("address:", cell.address, ' ')
     stdout.write "] "
   f.state.show = true
 
@@ -435,7 +435,7 @@ template forthArithFloat(f: var Forth, op: untyped, booleanop = false): untyped 
     for i in countdown(data.high, 0):
       discard f.data.push data[i]
 
-proc constructBody(f: var Forth, cc: sink CompileConstruct): ConstructError =
+proc constructBody(f: var Forth, cc: CompileConstruct): ConstructError =
   # dump cc
   var isTrue = true
   var idx = 0
@@ -517,7 +517,7 @@ proc constructBody(f: var Forth, cc: sink CompileConstruct): ConstructError =
 proc constructDef(vm: var Forth) =
   var cc = vm.compileConstruct
   var closure = proc(f: var Forth) =
-    var err = f.constructBody(move cc)
+    var err = f.constructBody cc
     if err.msg != "": echo err.msg
 
   vm.register(vm.compileConstruct.name, move closure)
@@ -720,6 +720,15 @@ proc eval(vm: var Forth, image: string): RunState =
         discard vm.runState.popFirst
       else:
         vm.runState[0] = rsInterpret
+    elif token == "@":
+      vm.state.getAddress = true
+    elif token == "!":
+      if vm.runState[0] == rsInterpret:
+        let (data, err) = vm.data.pop
+        handleErr err
+        if data.kind != CellType.address:
+          continue
+        vm.address[data.address](vm)
     elif token == ":":
       vm.runState[0] = rsCompile
     elif vm.ifthenConstruct("if", token):
@@ -740,7 +749,12 @@ proc eval(vm: var Forth, image: string): RunState =
       vm.constructDef
       vm.compileConstruct = CompileConstruct()
     elif token in vm.dict and vm.runState[0] == rsInterpret:
-      vm.address[vm.dict[token]](vm)
+      if vm.state.getAddress:
+        let data = Cell(kind: CellType.address, address: vm.dict[token])
+        discard vm.data.push data
+      else:
+        vm.address[vm.dict[token]](vm)
+      vm.state.getAddress = false
     elif (var (isnum, val) = token.isInt; isnum):
       putData(vm, val, vm.runState[0])
     elif (var (isnum, val) = token.isFloat; isnum and token != "."):
