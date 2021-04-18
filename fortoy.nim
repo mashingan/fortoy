@@ -664,6 +664,7 @@ template registration(vm: var Forth): untyped =
     handleErr err
     if data.kind != CellType.address: return
     f.address[data.address](f))
+  vm.register("bye", (f: var Forth) => (f.runState[0] = rsHalt))
 
 template passWhenCommented(vm: Forth, token: string): untyped =
   if vm.runState[0] == rsComment and not token.endsWith ")":
@@ -691,6 +692,7 @@ proc eval(vm: var Forth, image: string): RunState =
     inc vm.mem.pos, count
   var start = 0
   for token in image.splitWhitespace:
+    if vm.runState[0] == rsHalt: return rsHalt
     if commentToEnd: continue
     if token == "\\":
       commentToEnd = true
@@ -698,8 +700,6 @@ proc eval(vm: var Forth, image: string): RunState =
 
     vm.passWhenCommented token
     vm.passWhenInString token
-
-    if token == "bye": return rsHalt
 
     if vm.runState[0] == rsComment and token.endsWith ")":
       vm.runState[0] = rsCompile
