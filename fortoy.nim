@@ -433,7 +433,7 @@ template forthArithFloat(f: var Forth, op: untyped, booleanop = false): untyped 
       discard f.data.push data[i]
 
 proc constructBody(f: var Forth, cc: sink CompileConstruct): ConstructError =
-  dump cc
+  # dump cc
   var isTrue = true
   var idx = 0
   var lastjumpIdx = initDeque[int]()
@@ -481,7 +481,7 @@ proc constructBody(f: var Forth, cc: sink CompileConstruct): ConstructError =
       handleErr err
       let loopTime = looping.toU16 as int16
       lastLoopCount.addFirst loopTime
-      discard f.ret.push looping
+      discard f.ret.push 0'u16
     of TokenType.loop:
       if lastjumpIdx.len > 0 and lastLoopCount.len > 0:
         var count = lastLoopCount.popFirst
@@ -495,7 +495,9 @@ proc constructBody(f: var Forth, cc: sink CompileConstruct): ConstructError =
           let (c, err) = f.ret.pop
           handleErr err
           if c.kind == CellType.data:
-            discard f.ret.push(c.toU16 - 1)
+            discard f.ret.push(c.toU16 + 1)
+        else:
+          discard f.ret.pop
     of TokenType.break:
       for i, nextjmp in nextjumpIdx:
         if nextjmp > idx:
@@ -731,7 +733,7 @@ proc eval(vm: var Forth, image: string): RunState =
       vm.compileConstruct.construct.add initTokenObject(TokenType.break)
     elif token == ";" and vm.runState[0] == rsCompile:
       vm.runState[0] = rsInterpret
-      dump vm.compileConstruct
+      # dump vm.compileConstruct
       vm.constructDef
       vm.compileConstruct = CompileConstruct()
     elif token in vm.dict and vm.runState[0] == rsInterpret:
