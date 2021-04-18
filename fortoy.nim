@@ -7,13 +7,16 @@ type
   Stack = object
     data: array[1024, Cell]
     pos: Natural
+  EvalState = object
+    show: bool
+    getAddress: bool
   Forth = object
     data: Stack
     ret: Stack
     dict: TableRef[string, uint16]
     address: seq[(f: var Forth) -> void]
     mem: Memory
-    show: bool
+    state: EvalState
     compileConstruct: CompileConstruct
     runState: Deque[RunState]
 
@@ -72,7 +75,7 @@ proc sizeof(cc: CompileConstruct): Natural =
 
 proc sizeof(vm: Forth): Natural =
   result = vm.data.sizeof + vm.ret.sizeof + vm.dict.sizeof +
-    vm.mem.sizeof + vm.show.sizeof + vm.compileConstruct.sizeof +
+    vm.mem.sizeof + vm.state.sizeof + vm.compileConstruct.sizeof +
     vm.address.sizeof + vm.runState.sizeof
 
 converter toU16(c: Cell): uint16 =
@@ -236,7 +239,7 @@ proc showTop(f: var Forth) =
       pos = 0
     f.mem.pos = 0
     ]#
-  f.show = true
+  f.state.show = true
 
 proc showTopDouble(f: var Forth) =
   let (p1, err1) = f.data.pop
@@ -245,7 +248,7 @@ proc showTopDouble(f: var Forth) =
   handleErr err2
   let p = [p1.toU16, p2.toU16] as uint32
   stdout.write(p as int32, ' ')
-  f.show = true
+  f.state.show = true
 
 proc showTopQuad(f: var Forth) =
   var data: array[4, uint16]
@@ -256,7 +259,7 @@ proc showTopQuad(f: var Forth) =
   let p = data as uint64
 
   stdout.write(p as int64,' ')
-  f.show = true
+  f.state.show = true
 
 proc showTopFloat(f: var Forth) =
   checkBinary f
@@ -266,7 +269,7 @@ proc showTopFloat(f: var Forth) =
   handleErr err2
   let flo32 = [f1.toU16, f2.toU16] as float32
   stdout.write flo32, ' '
-  f.show = true
+  f.state.show = true
 
 proc showStack(f: var Forth) =
   if f.data.len == 0:
@@ -283,7 +286,7 @@ proc showStack(f: var Forth) =
       of CellType.address:
         stdout.write("address:", cell.data, ' ')
     stdout.write "] "
-  f.show = true
+  f.state.show = true
 
 proc dup(f: var Forth) =
   let (v, err) = f.data.pop
@@ -407,13 +410,13 @@ proc spaces(f: var Forth) =
   handleErr err
   for _ in 1'u16 .. v:
     stdout.write ' '
-  f.show = true
+  f.state.show = true
 
 proc emit(f: var Forth) =
   let (v, err) = f.data.pop
   handleErr err
   stdout.write chr(v.toU16)
-  f.show = true
+  f.state.show = true
 
 proc drop(f: var Forth) =
   let (_, err) = f.data.pop
@@ -745,9 +748,9 @@ proc eval(vm: var Forth, image: string): RunState =
     elif vm.runState[0] == rsCompile:
       vm.compileConstruct.construct.add initTokenObject(token)
 
-  if vm.show:
+  if vm.state.show:
     stdout.write " ok"
-    vm.show = false
+    vm.state.show = false
   result = vm.runState[0]
 
 proc main =
