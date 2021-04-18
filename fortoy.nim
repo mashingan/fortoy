@@ -455,6 +455,10 @@ proc constructBody(f: var Forth, cc: sink CompileConstruct): ConstructError =
       inc idx
       isTrue = true
       continue
+    elif obj.kind == TokenType.else:
+      isTrue = not isTrue
+      inc idx
+      continue
     if not isTrue:
       inc idx
       continue
@@ -472,10 +476,6 @@ proc constructBody(f: var Forth, cc: sink CompileConstruct): ConstructError =
       handleErr err
       let trueTrue = testTrue.toU16 as int16
       isTrue = trueTrue == -1
-    of TokenType.else:
-      isTrue = not isTrue
-    of TokenType.then:
-      isTrue = true
     of TokenType.do:
       let (looping, err) = f.data.pop
       handleErr err
@@ -505,7 +505,7 @@ proc constructBody(f: var Forth, cc: sink CompileConstruct): ConstructError =
           break
       discard f.ret.pop
       
-    of TokenType.noop:
+    of TokenType.noop, TokenType.else, TokenType.then:
       discard
 
     inc idx
