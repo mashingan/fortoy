@@ -501,6 +501,7 @@ proc constructBody(f: var Forth, cc: sink CompileConstruct): ConstructError =
         if nextjmp > idx:
           idx = nextjmp
           break
+      discard f.ret.pop
       
     of TokenType.noop:
       discard
