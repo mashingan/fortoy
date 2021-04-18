@@ -473,7 +473,11 @@ proc constructBody(f: var Forth, cc: CompileConstruct): ConstructError =
       discard f.data.push(Cell(kind: CellType.memory, pos: obj.mempos))
     of TokenType.word:
       if f.dict.hasKey(obj.word):
-        f.address[f.dict[obj.word]](f)
+        if f.state.getAddress:
+          discard f.data.push Cell(kind: CellType.address, address: f.dict[obj.word])
+          f.state.getAddress = false
+        else:
+          f.address[f.dict[obj.word]](f)
     of TokenType.if:
       let (testTrue, err) = f.data.pop
       handleErr err
@@ -757,7 +761,12 @@ proc eval(vm: var Forth, image: string): RunState =
     elif (var (isnum, val) = token.isFloat; isnum and token != "."):
       putData(vm, val, vm.runState[0])
     elif vm.runState[0] == rsCompile:
-      vm.compileConstruct.construct.add initTokenObject(token)
+      if vm.state.getAddress:
+        let data = Cell(kind: CellType.address, address: vm.dict[token])
+        vm.compileConstruct.construct.add initTokenObject(data)
+        vm.state.getAddress = false
+      else:
+        vm.compileConstruct.construct.add initTokenObject(token)
 
   if vm.state.show:
     stdout.write " ok"
