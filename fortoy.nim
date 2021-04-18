@@ -481,6 +481,7 @@ proc constructBody(f: var Forth, cc: sink CompileConstruct): ConstructError =
       handleErr err
       let loopTime = looping.toU16 as int16
       lastLoopCount.addFirst loopTime
+      discard f.ret.push looping
     of TokenType.loop:
       if lastjumpIdx.len > 0 and lastLoopCount.len > 0:
         var count = lastLoopCount.popFirst
@@ -491,6 +492,10 @@ proc constructBody(f: var Forth, cc: sink CompileConstruct): ConstructError =
               break
           dec count
           lastLoopCount.addFirst count
+          let (c, err) = f.ret.pop
+          handleErr err
+          if c.kind == CellType.data:
+            discard f.ret.push(c.toU16 - 1)
     of TokenType.break:
       for i, nextjmp in nextjumpIdx:
         if nextjmp > idx:
