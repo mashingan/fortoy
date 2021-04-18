@@ -654,6 +654,12 @@ template registration(vm: var Forth): untyped =
   vm.register("I", iR)
   vm.register("r@", iR)
   vm.register("J", jR)
+  vm.register("@", (f: var Forth) => (f.state.getAddress = true))
+  vm.register("!", proc(f: var Forth) =
+    let (data, err) = f.data.pop
+    handleErr err
+    if data.kind != CellType.address: return
+    f.address[data.address](f))
 
 template passWhenCommented(vm: Forth, token: string): untyped =
   if vm.runState[0] == rsComment and not token.endsWith ")":
@@ -720,15 +726,6 @@ proc eval(vm: var Forth, image: string): RunState =
         discard vm.runState.popFirst
       else:
         vm.runState[0] = rsInterpret
-    elif token == "@":
-      vm.state.getAddress = true
-    elif token == "!":
-      if vm.runState[0] == rsInterpret:
-        let (data, err) = vm.data.pop
-        handleErr err
-        if data.kind != CellType.address:
-          continue
-        vm.address[data.address](vm)
     elif token == ":":
       vm.runState[0] = rsCompile
     elif vm.ifthenConstruct("if", token):
@@ -752,9 +749,9 @@ proc eval(vm: var Forth, image: string): RunState =
       if vm.state.getAddress:
         let data = Cell(kind: CellType.address, address: vm.dict[token])
         discard vm.data.push data
+        vm.state.getAddress = false
       else:
         vm.address[vm.dict[token]](vm)
-      vm.state.getAddress = false
     elif (var (isnum, val) = token.isInt; isnum):
       putData(vm, val, vm.runState[0])
     elif (var (isnum, val) = token.isFloat; isnum and token != "."):
@@ -767,41 +764,42 @@ proc eval(vm: var Forth, image: string): RunState =
     vm.state.show = false
   result = vm.runState[0]
 
-proc main =
-  echo "start forth"
-  var vm = Forth(
-    data: initStack(),
-    ret: initStack(),
-    dict: newTable[string, uint16](),
-    address: newSeqOfCap[(f: var Forth) -> void](1024),
-    compileConstruct: CompileConstruct(),
-    runState: initDeque[RunState](),
-  )
-  vm.runState.addFirst rsInterpret
-  vm.registration
-  #dump vm.data.sizeof
-  dump vm.sizeof
-  for k, v in vm.fieldPairs:
-    dump k.sizeof
-    dump v.sizeof
+when isMainModule:
+  proc main =
+    echo "start forth"
+    var vm = Forth(
+      data: initStack(),
+      ret: initStack(),
+      dict: newTable[string, uint16](),
+      address: newSeqOfCap[(f: var Forth) -> void](1024),
+      compileConstruct: CompileConstruct(),
+      runState: initDeque[RunState](),
+    )
+    vm.runState.addFirst rsInterpret
+    vm.registration
+    #dump vm.data.sizeof
+    dump vm.sizeof
+    for k, v in vm.fieldPairs:
+      dump k.sizeof
+      dump v.sizeof
     
-  block repl:
-    var line: string
-    while true:
-      var c = getch()
-      if c.ord == 0: continue
-      if c == '\n' or c == '\r' or c == '\L':
-        stdout.write ' '
-        if vm.eval(line) == rsHalt: break
-        stdout.write '\n'
-        line = ""
-      else:
-        stdout.write c
-        if c == '\b':
-          if line.len > 0: line = line[0..^2]
+    block repl:
+      var line: string
+      while true:
+        var c = getch()
+        if c.ord == 0: continue
+        if c == '\n' or c == '\r' or c == '\L':
           stdout.write ' '
+          if vm.eval(line) == rsHalt: break
+          stdout.write '\n'
+          line = ""
+        else:
           stdout.write c
-          continue
-        line &= c
+          if c == '\b':
+            if line.len > 0: line = line[0..^2]
+            stdout.write ' '
+            stdout.write c
+            continue
+          line &= c
 
-main()
+  main()
